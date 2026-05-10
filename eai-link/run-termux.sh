@@ -4,7 +4,7 @@
 
 cd "$(dirname "$0")"
 
-MODE="${1:-tunnel}"
+MODE="${1:-lan}"
 
 echo ""
 echo "  EAi Link — starting Expo ($MODE mode)"
@@ -18,18 +18,23 @@ if [ ! -d node_modules ]; then
 fi
 
 case "$MODE" in
-  tunnel)
-    npx expo start --tunnel
-    ;;
   lan)
+    # Pakai WiFi lokal — HP & Termux harus di jaringan WiFi yang sama
     npx expo start --lan
     ;;
   localhost)
+    # Pakai localhost — cocok jika Termux & Expo Go di HP yang sama
     npx expo start --localhost
     ;;
+  tunnel)
+    # Tunnel via ngrok — butuh ngrok terinstall
+    echo "  [!] Mode tunnel butuh ngrok. Install dulu: pkg install ngrok"
+    echo "  [!] Coba pakai: bash run-termux.sh lan"
+    exit 1
+    ;;
   *)
-    echo "  Usage: bash run-termux.sh [tunnel|lan|localhost]"
-    echo "  Default: tunnel"
-    npx expo start --tunnel
+    echo "  Usage: bash run-termux.sh [lan|localhost]"
+    echo "  Default: lan"
+    npx expo start --lan
     ;;
 esac
