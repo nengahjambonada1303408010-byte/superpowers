@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import { useAuth } from '../context/AuthContext';
 import { MT5Account, MT5Position } from '../types/mt5';
 import AccountCard from '../components/AccountCard';
 import PositionItem from '../components/PositionItem';
+import MarketTicker from '../components/MarketTicker';
+
+const REFRESH_INTERVAL_MS = 10_000;
 
 export default function DashboardScreen() {
   const { client, signOut } = useAuth();
@@ -20,6 +23,9 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(REFRESH_INTERVAL_MS / 1000);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!client) return;
@@ -36,18 +42,40 @@ export default function DashboardScreen() {
     }
   }, [client]);
 
+  const startAutoRefresh = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    setCountdown(REFRESH_INTERVAL_MS / 1000);
+
+    intervalRef.current = setInterval(async () => {
+      await fetchAll();
+      setCountdown(REFRESH_INTERVAL_MS / 1000);
+    }, REFRESH_INTERVAL_MS);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => (c > 1 ? c - 1 : REFRESH_INTERVAL_MS / 1000));
+    }, 1000);
+  }, [fetchAll]);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       await fetchAll();
       setLoading(false);
+      startAutoRefresh();
     })();
-  }, [fetchAll]);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [fetchAll, startAutoRefresh]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchAll();
     setRefreshing(false);
+    startAutoRefresh();
   };
 
   if (loading) {
@@ -72,11 +100,12 @@ export default function DashboardScreen() {
       }
       ListHeaderComponent={
         <>
+          <MarketTicker positions={positions} />
           {account && <AccountCard account={account} />}
           {error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity onPress={fetchAll}>
+              <TouchableOpacity onPress={() => { fetchAll(); startAutoRefresh(); }}>
                 <Text style={styles.retryText}>Coba lagi</Text>
               </TouchableOpacity>
             </View>
@@ -85,14 +114,18 @@ export default function DashboardScreen() {
             <Text style={styles.sectionTitle}>
               Posisi Terbuka ({positions.length})
             </Text>
-            <TouchableOpacity onPress={signOut}>
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <Text style={styles.countdown}>🔄 {countdown}s</Text>
+              <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
+                <Text style={styles.logoutText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </>
       }
       ListEmptyComponent={
         <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>📭</Text>
           <Text style={styles.emptyText}>Tidak ada posisi terbuka</Text>
         </View>
       }
@@ -154,14 +187,28 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  countdown: {
+    color: '#475569',
+    fontSize: 12,
+  },
+  logoutBtn: {},
   logoutText: {
     color: '#ef4444',
     fontSize: 13,
     fontWeight: '600',
   },
   emptyBox: {
-    padding: 32,
+    padding: 48,
     alignItems: 'center',
+    gap: 8,
+  },
+  emptyIcon: {
+    fontSize: 32,
   },
   emptyText: {
     color: '#475569',
