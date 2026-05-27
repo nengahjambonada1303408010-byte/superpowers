@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(60, alias="RATE_LIMIT_PER_MINUTE")
     environment: str = Field("development", alias="ENVIRONMENT")
     max_agent_iterations: int = Field(10, alias="MAX_AGENT_ITERATIONS")
+    max_deep_scan_iterations: int = Field(25, alias="MAX_DEEP_SCAN_ITERATIONS")
+    max_deep_scan_rounds: int = Field(5, alias="MAX_DEEP_SCAN_ROUNDS")
     allowed_file_extensions: str = Field(
         ".py,.php,.js,.ts,.java,.go,.rb,.cs,.cpp,.c,.h,.html,.css,.json,.yaml,.yml,.env,.conf,.xml",
         alias="ALLOWED_FILE_EXTENSIONS",

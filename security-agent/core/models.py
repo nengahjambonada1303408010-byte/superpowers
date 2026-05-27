@@ -51,6 +51,16 @@ class PentestRequest(BaseModel):
     )
 
 
+class DeepScanRequest(BaseModel):
+    target_url: str = ""
+    target_content: str = ""
+    filename: str = ""
+    log_content: str = ""
+    scope: list[str] = Field(default_factory=list)
+    stop_on_critical: bool = True
+    max_rounds: int = Field(5, ge=1, le=10)
+
+
 class AuditRequest(BaseModel):
     target_type: TargetType = "full"
     target_url: str = ""
