@@ -8,14 +8,16 @@ import anthropic
 
 from core.config import settings
 from core.models import (
-    AgentResult, AuditRequest, DeepScanRequest, JobStatus, MonitorRequest,
-    PentestRequest, ScanRequest, SecurityReport,
+    AdaptiveScanRequest, AgentResult, AuditRequest, DeepScanRequest, JobStatus,
+    MonitorRequest, PentestRequest, ScanRequest, SecurityReport,
 )
 from agents.vulnerability_scanner import VulnerabilityAgent
 from agents.monitor_agent import MonitorAgent
 from agents.pentest_agent import PentestAgent
 from agents.report_agent import ReportAgent
 from agents.deep_scanner import DeepScanAgent
+from agents.adaptive_scanner import AdaptiveScanner
+from tools.tool_forge import ToolForge, SkillForge
 
 
 class Orchestrator:
@@ -26,6 +28,9 @@ class Orchestrator:
         self.pentest_agent = PentestAgent(self.client)
         self.report_agent = ReportAgent(self.client)
         self.deep_scanner = DeepScanAgent(self.client)
+        self.tool_forge = ToolForge(self.client)
+        self.skill_forge = SkillForge(self.client)
+        self.adaptive_scanner = AdaptiveScanner(self.client, self.tool_forge, self.skill_forge)
         self._jobs: dict[str, JobStatus] = {}
 
     async def run_full_audit(self, request: AuditRequest) -> SecurityReport:
@@ -164,6 +169,59 @@ class Orchestrator:
             report = SecurityReport(**report)
         report.target = target
         return report
+
+    async def run_adaptive_scan(self, request: AdaptiveScanRequest) -> SecurityReport:
+        target = request.target_url or request.filename or "provided content"
+        max_rounds = min(request.max_rounds, settings.max_deep_scan_rounds)
+        all_findings: list = []
+        all_results: list[AgentResult] = []
+
+        for round_num in range(1, max_rounds + 1):
+            prev_dicts = [f.model_dump() for f in all_findings]
+            result = await self.adaptive_scanner.run({
+                "target_url": request.target_url,
+                "target_content": request.target_content,
+                "filename": request.filename,
+                "scope": request.scope or ([request.target_url] if request.target_url else []),
+                "previous_findings": prev_dicts,
+                "round_number": round_num,
+            })
+            all_findings.extend(result.findings)
+            all_results.append(result)
+
+            has_critical = any(f.severity == "CRITICAL" for f in result.findings)
+            vectors_exhausted = result.metadata.get("vectors_exhausted", False)
+
+            if request.stop_on_critical and has_critical:
+                break
+            if vectors_exhausted:
+                break
+
+        if request.log_content:
+            log_result = await self.monitor_agent.run({"log_content": request.log_content, "log_format": "auto"})
+            all_findings.extend(log_result.findings)
+            all_results.append(log_result)
+
+        combined = AgentResult(
+            agent_type="adaptive_combined",
+            findings=all_findings,
+            tokens_used={k: sum(r.tokens_used.get(k, 0) for r in all_results)
+                         for k in ["input_tokens", "output_tokens", "cache_read_input_tokens"]},
+        )
+        report_result = await self.report_agent.run({"agent_results": [combined], "target": target})
+        report = report_result.metadata.get("report", SecurityReport(target=target))
+        if isinstance(report, dict):
+            report = SecurityReport(**report)
+        report.target = target
+        return report
+
+    async def run_adaptive_scan_async(self, job_id: str, request: AdaptiveScanRequest) -> None:
+        self.update_job(job_id, status="running", progress=5)
+        try:
+            report = await self.run_adaptive_scan(request)
+            self.update_job(job_id, status="completed", progress=100, result=report)
+        except Exception as exc:
+            self.update_job(job_id, status="failed", error=str(exc))
 
     async def run_deep_scan_async(self, job_id: str, request: DeepScanRequest) -> None:
         self.update_job(job_id, status="running", progress=5)
