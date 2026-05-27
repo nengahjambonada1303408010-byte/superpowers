@@ -4,7 +4,7 @@
 # Jalankan: bash setup.sh
 # =============================================================
 
-set -e
+set -eo pipefail 2>/dev/null || true   # lanjut walau satu step gagal
 
 RED='\033[91m'; YELLOW='\033[93m'; GREEN='\033[92m'
 CYAN='\033[96m'; BOLD='\033[1m'; RESET='\033[0m'
@@ -26,9 +26,9 @@ pkg install -y python python-pip clang libffi openssl libjpeg-turbo libxml2 libx
     echo -e "${YELLOW}Beberapa paket mungkin tidak tersedia, melanjutkan...${RESET}"
 }
 
-# ── Step 3: Upgrade pip ───────────────────────────────────────
-echo -e "${CYAN}[3/6] Upgrade pip...${RESET}"
-pip install --upgrade pip --quiet
+# ── Step 3: Upgrade pip via pkg (bukan pip install --upgrade pip) ────
+echo -e "${CYAN}[3/6] Upgrade pip via pkg...${RESET}"
+pkg upgrade python-pip -y 2>/dev/null || true
 
 # ── Step 4: Install Python packages ──────────────────────────
 echo -e "${CYAN}[4/6] Install Python packages...${RESET}"
