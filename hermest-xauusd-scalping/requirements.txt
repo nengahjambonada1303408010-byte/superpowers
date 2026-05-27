@@ -1,0 +1,8 @@
+MetaTrader5>=5.0.45
+git+https://github.com/NousResearch/hermes-agent.git@main
+PyQt5>=5.15.10
+pyqtgraph>=0.13.7
+pandas>=2.2.0
+numpy>=1.26.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
