@@ -22,9 +22,11 @@ pkg update -y -o Dpkg::Options::="--force-confnew" 2>/dev/null || true
 
 # ── Step 2: Install system dependencies ──────────────────────
 echo -e "${CYAN}[2/6] Install dependencies sistem...${RESET}"
-pkg install -y python python-pip clang libffi openssl libjpeg-turbo libxml2 libxslt curl git 2>/dev/null || {
+pkg install -y python python-pip clang libffi openssl libjpeg-turbo libxml2 libxslt curl git rust 2>/dev/null || {
     echo -e "${YELLOW}Beberapa paket mungkin tidak tersedia, melanjutkan...${RESET}"
 }
+# Install pre-compiled Python packages dari Termux repo (menghindari build dari source)
+pkg install -y python-pydantic python-cryptography 2>/dev/null || true
 
 # ── Step 3: Upgrade pip via pkg (bukan pip install --upgrade pip) ────
 echo -e "${CYAN}[3/6] Upgrade pip via pkg...${RESET}"
@@ -33,7 +35,24 @@ pkg upgrade python-pip -y 2>/dev/null || true
 # ── Step 4: Install Python packages ──────────────────────────
 echo -e "${CYAN}[4/6] Install Python packages...${RESET}"
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-pip install -r "$SCRIPT_DIR/requirements-termux.txt" --quiet
+# Pastikan cargo (Rust) ada di PATH jika sudah diinstall
+export PATH="$PATH:$HOME/.cargo/bin"
+
+# Install Rust-based packages terlebih dahulu dengan --prefer-binary
+# jiter & pydantic-core perlu Rust jika tidak ada pre-built wheel
+echo -e "${YELLOW}  Install Rust-based dependencies (jiter, pydantic-core)...${RESET}"
+pip install jiter pydantic-core --prefer-binary --quiet 2>/dev/null || {
+    echo -e "${YELLOW}  Pre-built wheel tidak ada, compile dari source (butuh beberapa menit)...${RESET}"
+    pip install jiter pydantic-core --quiet 2>/dev/null || \
+        echo -e "${YELLOW}  jiter/pydantic-core skip, akan dicoba bersama requirements...${RESET}"
+}
+
+# Install semua requirements
+echo -e "${YELLOW}  Install semua requirements...${RESET}"
+pip install -r "$SCRIPT_DIR/requirements-termux.txt" --prefer-binary --quiet 2>/dev/null || {
+    echo -e "${YELLOW}  Coba tanpa --prefer-binary...${RESET}"
+    pip install -r "$SCRIPT_DIR/requirements-termux.txt" --quiet
+}
 
 # ── Step 5: Setup .env ───────────────────────────────────────
 echo -e "${CYAN}[5/6] Konfigurasi .env...${RESET}"

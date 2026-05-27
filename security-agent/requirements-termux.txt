@@ -1,5 +1,9 @@
-# Requirements ringan untuk Termux / Android
-# Tidak ada uvicorn[standard] karena memerlukan kompilasi C yang berat di Android
+# Requirements untuk Termux / Android
+# Tidak ada uvicorn[standard] — menghindari kompilasi C berat di Android
+#
+# Install dengan:
+#   pip install -r requirements-termux.txt --prefer-binary
+# Atau jalankan: bash termux/setup.sh  (sudah otomatis)
 
 anthropic>=0.49.0
 fastapi>=0.115.0
