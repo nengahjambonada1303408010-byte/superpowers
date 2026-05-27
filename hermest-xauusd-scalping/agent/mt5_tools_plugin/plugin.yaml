@@ -1,0 +1,4 @@
+name: mt5-trading
+version: "1.0.0"
+description: "MetaTrader 5 XAUUSD full-access trading tools for Gold House AI"
+entry: __init__
