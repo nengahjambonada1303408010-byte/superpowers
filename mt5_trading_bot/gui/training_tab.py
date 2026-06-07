@@ -5,7 +5,7 @@ import threading
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QLabel, QPushButton, QComboBox, QSpinBox, QDoubleSpinBox,
-    QProgressBar, QTextEdit, QFormLayout, QSizePolicy
+    QProgressBar, QPlainTextEdit, QFormLayout, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt5.QtGui import QFont
@@ -180,7 +180,7 @@ class TrainingTab(QWidget):
         # Log
         log_group = QGroupBox("Training Log")
         log_layout = QVBoxLayout(log_group)
-        self.log_text = QTextEdit()
+        self.log_text = QPlainTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setMaximumBlockCount(500)
         self.log_text.setStyleSheet("font-family: monospace; font-size: 11px; background: #111; color: #ccc;")
@@ -262,7 +262,7 @@ class TrainingTab(QWidget):
         self.progress_label.setText(message)
 
     def _append_log(self, msg: str):
-        self.log_text.append(msg)
+        self.log_text.appendPlainText(msg)
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
