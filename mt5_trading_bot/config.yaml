@@ -1,0 +1,46 @@
+mt5:
+  login: 12345678
+  password: "your_password"
+  server: "Broker-Server"
+  path: ""  # kosong = cari otomatis, isi jika perlu: "C:/Program Files/MetaTrader 5/terminal64.exe"
+
+training:
+  years_of_data: 5
+  symbols:
+    - XAUUSD
+    - EURUSD
+    - GBPUSD
+    - US30
+    - BTCUSD
+  timeframe_htf: H1
+  timeframe_entry: M15
+  population_size: 100000
+  max_generations: 500
+  target_winrate: 0.75
+  min_trades: 100
+  data_split:
+    train: 0.70
+    validation: 0.15
+    test: 0.15
+  n_cpu_cores: -1
+  retrain_interval_days: 7
+  checkpoint_interval: 10
+
+risk:
+  mode: "percent_balance"   # "fixed_lot" atau "percent_balance"
+  fixed_lot: 0.01
+  risk_percent: 1.0
+  max_daily_loss_percent: 5.0
+  max_open_positions: 3
+  rr_ratio: 2.0
+
+live_trading:
+  default_mode: "manual"    # "auto" atau "manual"
+  min_formula_winrate: 0.75
+  check_interval_seconds: 5
+
+logging:
+  level: INFO
+  file: "logs/trading_bot.log"
+  rotation: "10 MB"
+  retention: "30 days"
