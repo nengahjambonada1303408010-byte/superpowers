@@ -361,6 +361,63 @@ class FormulaEngine:
         entry_series = htf_series.reindex(entry_index, method="ffill").fillna(0)
         return entry_series.values.astype(int)
 
+    def compute_signals_cached(self, cache, htf_trend: np.ndarray,
+                               formula: Dict) -> np.ndarray:
+        """
+        Faster version of compute_signals() that reads from IndicatorCache.
+        Build the cache once with IndicatorCache(df).build() before evolution.
+        This avoids recomputing all indicators for every formula.
+        """
+        p = formula["params"]
+        direction = formula["direction"]
+        conditions = formula["conditions"]
+        n = len(cache.c)
+        c = cache.c
+
+        rsi_arr   = cache.get_rsi(p["rsi_period"])
+        ema_f     = cache.get_ema(p["ema_fast"])
+        ema_s     = cache.get_ema(p["ema_slow"])
+        ema200    = cache.get_ema(p["ema200_period"])
+        macd_l, macd_sig, _ = cache.get_macd(p["macd_fast"], p["macd_slow"], p["macd_signal"])
+        bb_u, bb_m, bb_l = cache.get_bb(p["bb_period"])
+        adx_arr   = cache.get_adx(p["adx_period"])
+        stoch_k   = cache.get_stoch_k(p["stoch_k"])
+        stoch_d   = cache.get_stoch_d(p["stoch_k"])
+        cci_arr   = cache.get_cci(p["cci_period"])
+        willr_arr = cache.get_willr(p["willr_period"])
+
+        mom_period = p.get("mom_period", 10)
+        mom_arr = np.full(n, np.nan)
+        mom_arr[mom_period:] = c[mom_period:] - c[:-mom_period]
+
+        patterns = cache.patterns
+        h = cache.h
+        l = cache.l
+
+        condition_masks = []
+        for cond in conditions:
+            mask = self._evaluate_condition(
+                cond, c, h, l, rsi_arr, ema_f, ema_s, ema200, macd_l, macd_sig,
+                bb_u, bb_m, bb_l, adx_arr, stoch_k, stoch_d, cci_arr,
+                willr_arr, mom_arr, patterns, htf_trend, p
+            )
+            condition_masks.append(mask)
+
+        if condition_masks:
+            combined = np.ones(n, dtype=bool)
+            for m in condition_masks:
+                combined &= m
+        else:
+            combined = np.zeros(n, dtype=bool)
+
+        signal = np.zeros(n, dtype=int)
+        if direction == "buy":
+            signal[combined] = 1
+        else:
+            signal[combined] = -1
+
+        return signal
+
     def describe_formula(self, formula: Dict) -> str:
         p = formula["params"]
         conds_str = " + ".join(formula["conditions"])

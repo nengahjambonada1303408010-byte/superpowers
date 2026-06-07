@@ -142,9 +142,11 @@ def adx(high: np.ndarray, low: np.ndarray, close: np.ndarray,
         smooth_minus[i] = smooth_minus[i - 1] - smooth_minus[i - 1] / period + minus_dm[i]
         smooth_tr[i] = smooth_tr[i - 1] - smooth_tr[i - 1] / period + tr_arr[i]
 
-    pdi = np.where(smooth_tr > 0, 100 * smooth_plus / smooth_tr, 0)
-    mdi = np.where(smooth_tr > 0, 100 * smooth_minus / smooth_tr, 0)
-    dx = np.where((pdi + mdi) > 0, 100 * np.abs(pdi - mdi) / (pdi + mdi), 0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pdi = np.where(smooth_tr > 0, 100 * smooth_plus / smooth_tr, 0.0)
+        mdi = np.where(smooth_tr > 0, 100 * smooth_minus / smooth_tr, 0.0)
+        denom = pdi + mdi
+        dx = np.where(denom > 0, 100 * np.abs(pdi - mdi) / denom, 0.0)
 
     adx_arr = np.full(n, np.nan)
     start = 2 * period

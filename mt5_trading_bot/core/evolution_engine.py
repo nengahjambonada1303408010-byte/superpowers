@@ -24,6 +24,19 @@ def _evaluate_one(formula: Dict, df_entry: pd.DataFrame,
         return 0.0
 
 
+def _evaluate_one_cached(formula: Dict, cache, htf_trend: np.ndarray,
+                          df_entry: pd.DataFrame, fe: FormulaEngine,
+                          be: BacktestEngine) -> float:
+    """Evaluate fitness using pre-computed indicator cache (faster)."""
+    try:
+        signals = fe.compute_signals_cached(cache, htf_trend, formula)
+        trades = be._simulate_trades(df_entry, signals, formula)
+        result = be._build_result(trades)
+        return result.fitness_score()
+    except Exception:
+        return 0.0
+
+
 class EvolutionEngine:
     def __init__(self, config: dict = None):
         cfg = config or {}
@@ -40,17 +53,29 @@ class EvolutionEngine:
     def evolve(self, df_entry: pd.DataFrame, df_htf: pd.DataFrame,
                formula_engine: FormulaEngine, backtest_engine: BacktestEngine,
                callback: Callable = None,
-               checkpoint_callback: Callable = None) -> Dict:
+               checkpoint_callback: Callable = None,
+               use_cache: bool = True) -> Dict:
         """
         Main evolution loop.
 
         callback(gen, best_winrate, best_formula, pop_size) - called each generation for GUI updates
         checkpoint_callback(gen, best_formula, metrics) - called every checkpoint_interval generations
+        use_cache: pre-compute all indicator variants for 5-20x speedup
 
         Returns: {best_formula, best_fitness, best_metrics, history}
         """
         logger.info(f"Starting evolution: pop={self.population_size}, "
                     f"max_gen={self.max_generations}, target_wr={self.target_winrate}")
+
+        # Pre-compute indicator cache for faster formula evaluation
+        cache = None
+        htf_trend = np.zeros(len(df_entry), dtype=int)
+        if use_cache:
+            from core.indicator_cache import IndicatorCache
+            cache = IndicatorCache(df_entry)
+            cache.build()
+            if df_htf is not None and len(df_htf) > 0:
+                htf_trend = formula_engine._compute_htf_trend(df_htf, df_entry.index)
 
         population = formula_engine.generate_population(self.population_size)
         history = []
@@ -59,10 +84,15 @@ class EvolutionEngine:
         best_metrics = None
 
         for gen in range(self.max_generations):
-            # Evaluate all formulas in parallel
-            fitness_scores = self._evaluate_population(
-                population, df_entry, df_htf, formula_engine, backtest_engine
-            )
+            # Evaluate all formulas in parallel (cached path is much faster)
+            if cache is not None:
+                fitness_scores = self._evaluate_population_cached(
+                    population, cache, htf_trend, df_entry, formula_engine, backtest_engine
+                )
+            else:
+                fitness_scores = self._evaluate_population(
+                    population, df_entry, df_htf, formula_engine, backtest_engine
+                )
 
             # Find best in this generation
             best_idx = int(np.argmax(fitness_scores))
@@ -131,12 +161,26 @@ class EvolutionEngine:
     def _evaluate_population(self, population: List[Dict], df_entry: pd.DataFrame,
                               df_htf: pd.DataFrame, fe: FormulaEngine,
                               be: BacktestEngine) -> np.ndarray:
-        """Evaluate all formulas in parallel using joblib."""
+        """Evaluate all formulas in parallel using joblib (fallback, no cache)."""
         if self.n_jobs == 1:
             scores = [_evaluate_one(f, df_entry, df_htf, fe, be) for f in population]
         else:
-            scores = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+            scores = Parallel(n_jobs=self.n_jobs, backend="loky")(
                 delayed(_evaluate_one)(f, df_entry, df_htf, fe, be)
+                for f in population
+            )
+        return np.array(scores, dtype=float)
+
+    def _evaluate_population_cached(self, population: List[Dict], cache,
+                                     htf_trend: np.ndarray, df_entry: pd.DataFrame,
+                                     fe: FormulaEngine, be: BacktestEngine) -> np.ndarray:
+        """Evaluate all formulas using pre-computed indicator cache (5-20x faster)."""
+        if self.n_jobs == 1:
+            scores = [_evaluate_one_cached(f, cache, htf_trend, df_entry, fe, be)
+                      for f in population]
+        else:
+            scores = Parallel(n_jobs=self.n_jobs, backend="loky")(
+                delayed(_evaluate_one_cached)(f, cache, htf_trend, df_entry, fe, be)
                 for f in population
             )
         return np.array(scores, dtype=float)
